@@ -25,9 +25,6 @@ class Grammar:
     self.first = {}
     self.follow = {}
 
-  def copy(self):
-    return copy.deepcopy(self)
-
   def parse(lines: typing.Iterable[str]):
     ans = Grammar()
 
@@ -144,7 +141,11 @@ class Grammar:
     while aug_start in self.nonterminals:
       aug_start = aug_start + "'"
 
-    g = self.copy()
+    g = Grammar()
+    g.productions = self.productions
+    g.start_symbol = self.start_symbol
+    g.nonterminals = self.nonterminals
+    
     g.parse_single_production(f"{aug_start} -> {g.start_symbol}")
     g.start_symbol = aug_start
     return g
