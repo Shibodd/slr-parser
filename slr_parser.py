@@ -1,5 +1,8 @@
 import grammar
 import pprint
+from enum import IntEnum
+
+from dataclasses import dataclass
 
 class SlrState:
   items: set[tuple[grammar.Production, int]]
@@ -49,6 +52,37 @@ class SlrState:
         # Break out of the for loop and begin again with a new iterator.
         if len(self.items) != old_len:
           break
+  
+  def __eq__(self, __value: object) -> bool:
+    return isinstance(__value, SlrState) and __value.items == self.items
+
+def dict_get_or_add_default(d, key, default):
+  if key not in d:
+    d[key] = default
+  return d[key]
+
+def list_indexof_or_add(list: list, item):
+  n = len(list)
+  
+  for i in range(n):
+    if list[i] == item:
+      return i
+
+  list.append(item)
+  return n
+
+
+@dataclass(frozen=True)
+class SlrActionAccept:
+  pass
+
+@dataclass(frozen=True)
+class SlrActionReduce:
+  production: grammar.Production
+
+@dataclass(frozen=True)
+class SlrActionShift:
+  state: int
 
 class SlrParser:
   def __init__(self):
@@ -68,8 +102,8 @@ class SlrParser:
     startState.closure(G)
 
     states = [startState]
-    action = []
-    goto = []
+    action = {}
+    goto = {}
 
     state_id = 0
     while state_id < len(states):
@@ -81,14 +115,24 @@ class SlrParser:
         if idx < len(prod.body):
           next_sym = prod.body[idx]
 
+          goto_state_id = list_indexof_or_add(states, state.goto(G, next_sym))
+
           if next_sym in G.nonterminals:
-            if len(action) < state_id:
-              action.append({})
-            action[state_id][next_sym] = 
+            g = dict_get_or_add_default(goto, state_id, {})
+            
+            if next_sym in g:
+              raise Exception("Not an LR1 grammar.")
+            
+            g[next_sym] = goto_state_id # goto goto_state_id
           else:
-            pass
+            a = dict_get_or_add_default(action, state_id, {}) 
+            if next_sym in a:
+              raise Exception("Not an LR1 grammar.")
+            
+            a[next_sym] = SlrActionShift(goto_state_id) # shift goto_state_id
         else:
           pass
+          #a = list_get_or_default(action, state_id, {})
         
 
 
