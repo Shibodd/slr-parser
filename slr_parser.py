@@ -2,6 +2,7 @@ import grammar
 import pprint
 from enum import IntEnum
 
+import tokenizer
 from dataclasses import dataclass
 
 class SlrState:
@@ -56,10 +57,19 @@ class SlrState:
   def __eq__(self, __value: object) -> bool:
     return isinstance(__value, SlrState) and __value.items == self.items
 
-def dict_get_or_add_default(d, key, default):
-  if key not in d:
-    d[key] = default
-  return d[key]
+def dict2d_sync_value(d: dict, d_key1, d_key2, value):
+  if d_key1 not in d:
+    d[d_key1] = {}
+  
+  if d_key2 in d[d_key1]:
+    if d[d_key1][d_key2] != value:
+      raise KeyError("The key already exists with a different value.")
+  else:
+    d[d_key1][d_key2] = value # shift goto_state_id
+
+def dict2d_get_or_none(d: dict, d_key1, d_key2):
+  ans = d.get(d_key1, None)
+  return ans.get(d_key2, None) if ans is not None else None
 
 def list_indexof_or_add(list: list, item):
   n = len(list)
@@ -72,13 +82,16 @@ def list_indexof_or_add(list: list, item):
   return n
 
 
+
+
 @dataclass(frozen=True)
 class SlrActionAccept:
   pass
 
 @dataclass(frozen=True)
 class SlrActionReduce:
-  production: grammar.Production
+  nonterminal: str
+  body_len: int
 
 @dataclass(frozen=True)
 class SlrActionShift:
@@ -86,7 +99,8 @@ class SlrActionShift:
 
 class SlrParser:
   def __init__(self):
-    pass
+    self.action = {}
+    self.goto = {}
 
   def set_grammar(self, G: grammar.Grammar):
     G = G.get_augmented_grammar()
@@ -102,51 +116,64 @@ class SlrParser:
     startState.closure(G)
 
     states = [startState]
-    action = {}
-    goto = {}
+    self.action = {}
+    self.goto = {}
 
     state_id = 0
     while state_id < len(states):
       state = states[state_id]
-      state_id = state_id + 1
 
-      for prod, idx in state.items:  
+      for prod, idx in state.items:
         # If there is a next symbol
         if idx < len(prod.body):
           next_sym = prod.body[idx]
 
           goto_state_id = list_indexof_or_add(states, state.goto(G, next_sym))
 
-          if next_sym in G.nonterminals:
-            g = dict_get_or_add_default(goto, state_id, {})
-            
-            if next_sym in g:
-              raise Exception("Not an LR1 grammar.")
-            
-            g[next_sym] = goto_state_id # goto goto_state_id
+          if next_sym in G.nonterminals:            
+            dict2d_sync_value(self.goto, state_id, next_sym, goto_state_id)
           else:
-            a = dict_get_or_add_default(action, state_id, {}) 
-            if next_sym in a:
-              raise Exception("Not an LR1 grammar.")
-            
-            a[next_sym] = SlrActionShift(goto_state_id) # shift goto_state_id
-        else:
-          pass
-          #a = list_get_or_default(action, state_id, {})
+            dict2d_sync_value(self.action, state_id, next_sym, SlrActionShift(goto_state_id))
         
+        # Otherwise, there is no next symbol.
+        else:
+          if prod == axiom:
+            dict2d_sync_value(self.action, state_id, grammar.END_MARKER, SlrActionAccept())
+          else:
+            for sym in G.follow[prod.lhs]:
+              dict2d_sync_value(self.action, state_id, sym, SlrActionReduce(prod.lhs, len(prod.body)))
 
+      state_id = state_id + 1
+
+  def parse(self, x):
+    stack = [0]
+    for token in tokenizer.tokenize(x):
+      action = dict2d_get_or_none(self.action, stack[-1], token)
+      
+      print(action)
+
+      if action is None:
+        raise Exception("Parse error.")
+      
+      if isinstance(action, SlrActionShift):
+        stack.append(action.state)
+
+      elif isinstance(action, SlrActionReduce):
+        # pop action.body_len states from stack
+        stack = stack[:-action.body_len]
+
+        goto = dict2d_get_or_none(self.goto, stack[-1], action.nonterminal)
+        if goto is None:
+          raise Exception("Parse error.")
+
+        stack.append(goto)
+
+      elif isinstance(action, SlrActionAccept):
+        return
+      else:
+        assert False, f"Bruh {action}"
 
       
-
-
-
-
-
-
-
-
-  # An item is a pair (production, parseProgressIdx)
-
 
 with open('gr.txt', 'r') as f:
   g = grammar.Grammar.parse(f)
@@ -154,3 +181,7 @@ with open('gr.txt', 'r') as f:
 
   parser.set_grammar(g)
   
+  pprint.pprint(parser.action)
+  pprint.pprint(parser.goto)
+
+  parser.parse("aaaabbbb")
