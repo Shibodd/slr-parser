@@ -4,6 +4,10 @@ import pprint
 from tokenizer import tokenize
 from dataclasses import dataclass
 
+
+def production_remove_eps(prod: grammar.Production):
+  return grammar.Production(prod.lhs, tuple((x for x in prod.body if x != grammar.EPS)))
+
 class SlrState:
   items: set[tuple[grammar.Production, int]]
 
@@ -46,7 +50,7 @@ class SlrState:
         
         # Add all productions of next_sym as items with idx 0
         for next_sym_prod in (x for x in G.productions if x.lhs == next_sym): # TODO: can surely do better than O(n)
-          self.items.add((next_sym_prod, 0))
+          self.items.add((production_remove_eps(next_sym_prod), 0))
         
         # If we added anything to the set, the iterator is now invalid.
         # Break out of the for loop and begin again with a new iterator.
@@ -179,7 +183,8 @@ class SlrParser:
 
       elif isinstance(action, SlrActionReduce):
         # pop action.body_len states from stack
-        stack = stack[:-action.body_len]
+        if action.body_len > 0:
+          stack = stack[:-action.body_len]
 
         goto = dict2d_get_or_none(self.goto, stack[-1], action.nonterminal)
         if goto is None:
@@ -192,15 +197,12 @@ class SlrParser:
       
       else:
         assert False, f"Bruh {action}"
-    
-    
 
-      
 
-with open('gr.txt', 'r') as f:
+with open('grammars/expr.txt', 'r') as f:
   g = grammar.Grammar.parse(f)
   parser = SlrParser()
 
   parser.set_grammar(g)
 
-  parser.parse("1 * 2")
+  parser.parse("(123 + 4) + 50 * 2")
