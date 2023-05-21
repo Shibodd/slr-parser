@@ -31,7 +31,7 @@ class Grammar:
     for line in lines:
       line = line.strip()
       if len(line) <= 0:
-        return
+        continue
       
       ans.parse_single_production(line)
 

@@ -1,3 +1,8 @@
-def tokenize(x):
+import grammar
+
+def tokenize(x: str):
   for c in x:
-    yield c
+    if not c.isspace():
+      yield c
+
+  yield grammar.END_MARKER

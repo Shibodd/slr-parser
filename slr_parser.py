@@ -1,8 +1,7 @@
 import grammar
 import pprint
-from enum import IntEnum
 
-import tokenizer
+from tokenizer import tokenize
 from dataclasses import dataclass
 
 class SlrState:
@@ -97,8 +96,12 @@ class SlrActionReduce:
 class SlrActionShift:
   state: int
 
+class SlrParseException (Exception):
+  pass
+
 class SlrParser:
   def __init__(self):
+    self.states_sym = {}
     self.action = {}
     self.goto = {}
 
@@ -129,16 +132,19 @@ class SlrParser:
           next_sym = prod.body[idx]
 
           goto_state_id = list_indexof_or_add(states, state.goto(G, next_sym))
+          self.states_sym[goto_state_id] = next_sym
 
           if next_sym in G.nonterminals:            
             dict2d_sync_value(self.goto, state_id, next_sym, goto_state_id)
-          else:
+
+          elif next_sym != grammar.EPS:
             dict2d_sync_value(self.action, state_id, next_sym, SlrActionShift(goto_state_id))
         
         # Otherwise, there is no next symbol.
         else:
           if prod == axiom:
             dict2d_sync_value(self.action, state_id, grammar.END_MARKER, SlrActionAccept())
+
           else:
             for sym in G.follow[prod.lhs]:
               dict2d_sync_value(self.action, state_id, sym, SlrActionReduce(prod.lhs, len(prod.body)))
@@ -146,17 +152,30 @@ class SlrParser:
       state_id = state_id + 1
 
   def parse(self, x):
+    tokenizer = tokenize(x)
+    def tokenizer_next():
+      try:
+        return next(tokenizer)
+      except StopIteration:
+        raise SlrParseException("EOF reached.")
+
     stack = [0]
-    for token in tokenizer.tokenize(x):
+    token = tokenizer_next()
+    
+    # stops on parser accept or on SlrParseError
+    while True:
       action = dict2d_get_or_none(self.action, stack[-1], token)
       
-      print(action)
+      print(f"Token: {token}")
+      print(f"Stack: {stack} ({self.states_sym.get(stack[-1], None)})")
+      print(f"Action: {action}\n")
 
       if action is None:
-        raise Exception("Parse error.")
+        raise SlrParseException(f"Unexpected symbol {token}.")
       
       if isinstance(action, SlrActionShift):
         stack.append(action.state)
+        token = tokenizer_next()
 
       elif isinstance(action, SlrActionReduce):
         # pop action.body_len states from stack
@@ -164,14 +183,17 @@ class SlrParser:
 
         goto = dict2d_get_or_none(self.goto, stack[-1], action.nonterminal)
         if goto is None:
-          raise Exception("Parse error.")
+          raise SlrParseException(f"Unexpected symbol {token}.")
 
         stack.append(goto)
 
       elif isinstance(action, SlrActionAccept):
         return
+      
       else:
         assert False, f"Bruh {action}"
+    
+    
 
       
 
@@ -180,8 +202,5 @@ with open('gr.txt', 'r') as f:
   parser = SlrParser()
 
   parser.set_grammar(g)
-  
-  pprint.pprint(parser.action)
-  pprint.pprint(parser.goto)
 
-  parser.parse("aaaabbbb")
+  parser.parse("1 * 2")
