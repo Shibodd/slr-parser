@@ -30,9 +30,9 @@ class Grammar:
 
     for line in lines:
       line = line.strip()
-      if len(line) <= 0:
+      if len(line) <= 0 or line.startswith("#"):
         continue
-      
+
       ans.parse_single_production(line)
 
     return ans

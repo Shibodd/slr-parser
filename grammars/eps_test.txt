@@ -1,0 +1,29 @@
+# E -> N
+
+N -> a N'
+
+N' -> eps
+N' -> a
+
+
+
+# State 0:
+# S -> . N
+# N -> . a N'
+
+# State 1:
+# S -> N .
+
+# State 2:
+# N -> a . N'
+# N' -> . eps
+# N' -> . a
+
+# State 3:
+# N -> a N' .
+
+# State 4:
+# N' -> a .
+
+# State 5:
+# N' -> eps .
